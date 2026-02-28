@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  weather-mcp-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_DEBUG=false
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a test service to verify the server
+  test-client:
+    image: curlimages/curl:latest
+    depends_on:
+      weather-mcp-server:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Testing server health...'
+        curl -f http://weather-mcp-server:8000/health &&
+        echo 'Testing tools endpoint...'
+        curl -f http://weather-mcp-server:8000/tools &&
+        echo 'Server is ready!'
+      "
+    profiles:
+      - test
