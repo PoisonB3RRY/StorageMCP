@@ -3,7 +3,10 @@ from typing import Any, Dict, List
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from ..models.responses import MCPResponse
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "models"))
+from responses import MCPResponse
 
 async def get_tools():
     """

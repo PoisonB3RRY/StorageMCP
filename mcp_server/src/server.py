@@ -11,11 +11,17 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from weather import get_forecast, get_alerts
 
 # Import endpoints
-from .endpoints.alerts import get_weather_alerts
-from .endpoints.forecast import get_weather_forecast
-from .endpoints.health import health_check
-from .endpoints.tools import get_tools
-from .models.responses import AlertsRequest, ForecastRequest, MCPResponse
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "endpoints"))
+from alerts import get_weather_alerts
+from forecast import get_weather_forecast
+from health import health_check
+from tools import get_tools
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "models"))
+from responses import AlertsRequest, ForecastRequest, MCPResponse
 
 # Configure logging
 logging.basicConfig(

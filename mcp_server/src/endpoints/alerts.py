@@ -5,7 +5,10 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from ..models.responses import MCPResponse
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "models"))
+from responses import MCPResponse
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))

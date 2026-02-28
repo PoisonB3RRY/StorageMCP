@@ -5,8 +5,10 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI
 
-from .config import get_settings
-from .server import app
+# Add the current directory to sys.path to enable absolute imports
+sys.path.insert(0, os.path.dirname(__file__))
+from config import get_settings
+from server import app
 
 # Add the parent directory to sys.path to import weather module
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
