@@ -1,18 +1,21 @@
-import asyncio
-import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
 # Add the parent directory to sys.path to import weather module
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from weather import get_forecast, get_alerts
+
+# Import endpoints
+from .endpoints.alerts import get_weather_alerts
+from .endpoints.forecast import get_weather_forecast
+from .endpoints.health import health_check
+from .endpoints.tools import get_tools
+from .models.responses import AlertsRequest, ForecastRequest, MCPResponse
 
 # Configure logging
 logging.basicConfig(
@@ -41,99 +44,36 @@ app.add_middleware(
 )
 
 
-class ForecastRequest(BaseModel):
-    latitude: float = Field(..., description="Latitude of the location")
-    longitude: float = Field(..., description="Longitude of the location")
-
-
-class AlertsRequest(BaseModel):
-    state: str = Field(..., description="US state to get alerts for (e.g., 'CA')")
-
-
-class MCPResponse(BaseModel):
-    success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
-
-
 @app.post("/forecast", response_model=MCPResponse)
-async def get_weather_forecast(request: ForecastRequest):
+async def forecast_endpoint(request: ForecastRequest):
     """
     Get weather forecast for a location.
     """
-    try:
-        logger.info(f"Getting forecast for lat={request.latitude}, lon={request.longitude}")
-        result = await asyncio.to_thread(
-            get_forecast, request.latitude, request.longitude
-        )
-        return MCPResponse(success=True, data=result)
-    except Exception as e:
-        logger.error(f"Error getting forecast: {str(e)}")
-        return MCPResponse(success=False, error=str(e))
+    return await get_weather_forecast(request)
 
 
 @app.post("/alerts", response_model=MCPResponse)
-async def get_weather_alerts(request: AlertsRequest):
+async def alerts_endpoint(request: AlertsRequest):
     """
     Get weather alerts for a US state.
     """
-    try:
-        logger.info(f"Getting alerts for state={request.state}")
-        result = await asyncio.to_thread(get_alerts, request.state)
-        return MCPResponse(success=True, data=result)
-    except Exception as e:
-        logger.error(f"Error getting alerts: {str(e)}")
-        return MCPResponse(success=False, error=str(e))
+    return await get_weather_alerts(request)
 
 
 @app.get("/health")
-async def health_check():
+async def health_endpoint():
     """
     Health check endpoint.
     """
-    return {"status": "healthy", "service": "weather-mcp-server"}
+    return await health_check()
 
 
 @app.get("/tools")
-async def get_tools():
+async def tools_endpoint():
     """
     Return available tools for MCP clients.
     """
-    tools = [
-        {
-            "name": "get_forecast",
-            "description": "Get weather forecast for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "latitude": {
-                        "type": "number",
-                        "description": "Latitude of the location",
-                    },
-                    "longitude": {
-                        "type": "number",
-                        "description": "Longitude of the location",
-                    },
-                },
-                "required": ["latitude", "longitude"],
-            },
-        },
-        {
-            "name": "get_alerts",
-            "description": "Get weather alerts for a US state",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "state": {
-                        "type": "string",
-                        "description": "US state to get alerts for (e.g., 'CA')",
-                    },
-                },
-                "required": ["state"],
-            },
-        },
-    ]
-    return {"tools": tools}
+    return await get_tools()
 
 
 if __name__ == "__main__":
