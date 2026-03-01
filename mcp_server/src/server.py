@@ -18,6 +18,7 @@ from alerts import get_weather_alerts
 from forecast import get_weather_forecast
 from health import health_check
 from tools import get_tools
+from prompts import get_prompt_templates, get_prompt_template, get_prompt_categories, PromptRequest
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "models"))
@@ -80,6 +81,31 @@ async def tools_endpoint():
     Return available tools for MCP clients.
     """
     return await get_tools()
+
+
+@app.get("/prompts")
+async def prompts_endpoint():
+    """
+    Return available prompt templates for MCP clients.
+    """
+    return await get_prompt_templates()
+
+
+@app.get("/prompts/categories")
+async def prompt_categories_endpoint():
+    """
+    Return prompt template categories.
+    """
+    return await get_prompt_categories()
+
+
+@app.post("/prompts/{name}")
+async def prompt_template_endpoint(name: str, request: PromptRequest):
+    """
+    Get a specific prompt template with optional parameter rendering.
+    """
+    request.name = name  # Set the name from path parameter
+    return await get_prompt_template(request)
 
 
 if __name__ == "__main__":
