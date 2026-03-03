@@ -1,123 +1,113 @@
-import json
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import patch, AsyncMock
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from server import app
-
-client = TestClient(app)
+from server import get_alerts, get_forecast, make_nws_request, mcp
 
 
-class TestServer:
-    """Test cases for the MCP server."""
+class TestWeatherTools:
+    """Test cases for the MCP weather tools."""
 
-    def test_health_check(self):
-        """Test the health check endpoint."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert data["service"] == "weather-mcp-server"
-
-    def test_get_tools(self):
-        """Test the tools endpoint."""
-        response = client.get("/tools")
-        assert response.status_code == 200
-        data = response.json()
-        assert "tools" in data
-        assert len(data["tools"]) == 2
+    @pytest.mark.asyncio
+    async def test_get_alerts_with_active_alerts(self):
+        """Test get_alerts with active alerts."""
+        mock_data = {
+            "features": [
+                {
+                    "properties": {
+                        "event": "Severe Thunderstorm Warning",
+                        "areaDesc": "San Francisco County",
+                        "severity": "Severe",
+                        "description": "Severe thunderstorm warning in effect",
+                        "instruction": "Take shelter immediately"
+                    }
+                }
+            ]
+        }
         
-        tools = data["tools"]
-        tool_names = [tool["name"] for tool in tools]
-        assert "get_forecast" in tool_names
-        assert "get_alerts" in tool_names
+        with patch("server.make_nws_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_data
+            result = await get_alerts("CA")
+            assert "Severe Thunderstorm Warning" in result
+            assert "San Francisco County" in result
 
-    @patch("server.get_forecast")
-    def test_get_forecast_success(self, mock_get_forecast):
+    @pytest.mark.asyncio
+    async def test_get_alerts_no_alerts(self):
+        """Test get_alerts with no active alerts."""
+        mock_data = {"features": []}
+        
+        with patch("server.make_nws_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_data
+            result = await get_alerts("CA")
+            assert "No active weather alerts" in result
+
+    @pytest.mark.asyncio
+    async def test_get_alerts_error(self):
+        """Test get_alerts with API error."""
+        with patch("server.make_nws_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = None
+            result = await get_alerts("CA")
+            assert "Failed to retrieve weather alerts" in result
+
+    @pytest.mark.asyncio
+    async def test_get_forecast_success(self):
         """Test successful forecast request."""
-        mock_result = {
-            "forecast": [
-                {"period": "Today", "temperature": "75F", "description": "Sunny"},
-                {"period": "Tonight", "temperature": "55F", "description": "Clear"},
-            ]
+        mock_points_data = {
+            "properties": {
+                "forecast": "https://api.weather.gov/gridpoints/MTR/84,105/forecast"
+            }
         }
-        mock_get_forecast.return_value = mock_result
+        mock_forecast_data = {
+            "properties": {
+                "periods": [
+                    {
+                        "name": "Today",
+                        "temperature": 75,
+                        "temperatureUnit": "F",
+                        "windSpeed": "10 mph",
+                        "windDirection": "NW",
+                        "detailedForecast": "Sunny and warm"
+                    }
+                ]
+            }
+        }
+        
+        with patch("server.make_nws_request", new_callable=AsyncMock) as mock_request:
+            mock_request.side_effect = [mock_points_data, mock_forecast_data]
+            result = await get_forecast(37.7749, -122.4194)
+            assert "Today" in result
+            assert "75" in result
 
-        response = client.post(
-            "/forecast",
-            json={"latitude": 37.7749, "longitude": -122.4194}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["data"] == mock_result
-        mock_get_forecast.assert_called_once_with(37.7749, -122.4194)
-
-    @patch("server.get_forecast")
-    def test_get_forecast_error(self, mock_get_forecast):
+    @pytest.mark.asyncio
+    async def test_get_forecast_error(self):
         """Test forecast request with error."""
-        mock_get_forecast.side_effect = Exception("API Error")
+        with patch("server.make_nws_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = None
+            result = await get_forecast(37.7749, -122.4194)
+            assert "Unable to fetch forecast data" in result
 
-        response = client.post(
-            "/forecast",
-            json={"latitude": 37.7749, "longitude": -122.4194}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is False
-        assert "API Error" in data["error"]
 
-    @patch("server.get_alerts")
-    def test_get_alerts_success(self, mock_get_alerts):
-        """Test successful alerts request."""
-        mock_result = {
-            "alerts": [
-                {"event": "Severe Thunderstorm Warning", "severity": "Severe"},
-                {"event": "Flash Flood Watch", "severity": "Moderate"},
-            ]
-        }
-        mock_get_alerts.return_value = mock_result
+class TestMCPServer:
+    """Test cases for MCP server configuration."""
 
-        response = client.post(
-            "/alerts",
-            json={"state": "CA"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["data"] == mock_result
-        mock_get_alerts.assert_called_once_with("CA")
+    def test_mcp_server_name(self):
+        """Test that MCP server has correct name."""
+        assert mcp.name == "weather"
 
-    @patch("server.get_alerts")
-    def test_get_alerts_error(self, mock_get_alerts):
-        """Test alerts request with error."""
-        mock_get_alerts.side_effect = Exception("Invalid state")
+    def test_tools_registered(self):
+        """Test that tools are registered."""
+        tools = mcp._tool_manager._tools
+        assert "get_alerts" in tools
+        assert "get_forecast" in tools
 
-        response = client.post(
-            "/alerts",
-            json={"state": "XX"}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is False
-        assert "Invalid state" in data["error"]
-
-    def test_forecast_invalid_request(self):
-        """Test forecast request with invalid data."""
-        response = client.post(
-            "/forecast",
-            json={"latitude": "invalid", "longitude": -122.4194}
-        )
-        assert response.status_code == 422  # Validation error
-
-    def test_alerts_invalid_request(self):
-        """Test alerts request with invalid data."""
-        response = client.post(
-            "/alerts",
-            json={"state": 123}
-        )
-        assert response.status_code == 422  # Validation error
+    def test_prompts_registered(self):
+        """Test that prompts are registered."""
+        prompts = mcp._prompt_manager._prompts
+        assert "weather_query" in prompts
+        assert "weather_analysis" in prompts
+        assert "weather_report" in prompts
+        assert "alert_summary" in prompts
+        assert "daily_briefing" in prompts
