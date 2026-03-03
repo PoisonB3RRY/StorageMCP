@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(__file__));
 
 from config import get_settings
 
